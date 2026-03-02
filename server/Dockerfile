@@ -1,0 +1,21 @@
+FROM node:25-bookworm-slim
+WORKDIR /usr/local/app
+
+# Install the application dependencies
+RUN apt update
+
+# Copy in the source code
+COPY server.js server.js
+COPY src/ src/
+COPY package.json package.json
+COPY package-lock.json package-lock.json
+EXPOSE 3000
+
+RUN npm install
+
+# Setup an app user so the container doesn't run as the root user
+RUN useradd app
+USER app
+
+CMD ["npm", "start"]
+
