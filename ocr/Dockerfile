@@ -8,6 +8,8 @@ RUN apt install -y libtesseract-dev
 RUN apt install -y imagemagick
 RUN apt install -y python3
 RUN apt install -y python3-pip
+
+# Set up tesseract for OCR processing
 RUN pip3 install opencv-python numpy pytesseract --break-system-packages
 
 # TODO(map) This should probably be something I can call directly like a flask server or something?

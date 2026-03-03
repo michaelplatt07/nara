@@ -18,3 +18,8 @@ services:
     build:
       context: ./ocr
       dockerfile: Dockerfile
+
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
