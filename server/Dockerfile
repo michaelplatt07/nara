@@ -5,7 +5,8 @@ WORKDIR /usr/local/app
 RUN apt update
 
 # Copy in the source code
-COPY server.js server.js
+COPY server.ts server.ts
+COPY middleware.ts middleware.ts
 COPY src/ src/
 COPY package.json package.json
 COPY package-lock.json package-lock.json
@@ -17,5 +18,5 @@ RUN npm install
 RUN useradd app
 USER app
 
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]
 

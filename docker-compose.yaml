@@ -23,3 +23,15 @@ services:
     build:
       context: ./scraper
       dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./models:/home/app/models
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    
