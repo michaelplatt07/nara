@@ -16,7 +16,8 @@ hf_hub_download(
     repo_id="microsoft/Phi-3-mini-4k-instruct-gguf",
     filename="Phi-3-mini-4k-instruct-q4.gguf",
     local_dir="/home/michael/Desktop/programming/nara/models"
-)```
+)
+```
 
 ## Deployment
 The system is designed to be able to be deployed all locally on a system with a single `docker` command. Simply run
