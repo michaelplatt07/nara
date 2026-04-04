@@ -1,8 +1,10 @@
-from flask import Flask, request
-from recipe_scrapers import scrape_me
+from flask import Flask, request, Response, stream_with_context
+import json
+import time
+from job import run_scrape_job
+import threading
+import uuid
 import logging
-from parser import parse_ingredient
-from playwright.sync_api import sync_playwright
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,9 +14,12 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
+# In memory storage of jobs running. This allows the process to be non-blocking and for the FE to poll for results
+jobs = {}
+
 
 @app.route("/health")
-def hello_world():
+def health():
     return "Healthy", 201
 
 
@@ -25,47 +30,80 @@ def scrape():
         logging.info("No URL provided")
         return "No URL provided", 500
 
-    if "facebook" in recipe_url:
-        # TODO(map) Move this to a different method at some point
-        title = ""
-        ingredients = []
-        instructions = []
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
-            )
-            page = browser.new_page()
-            page.goto(recipe_url)
-            caption = page.locator('link[rel="alternate"][title]')
-            recipe = caption.get_attribute("title")
-            logging.info(f"Extracted data: {recipe}")
-            for ingredient in recipe[
-                recipe.lower().index("ingredients")
-                + len("ingredients:") : recipe.lower().index("instructions")
-            ].split("\n"):
-                if ingredient:
-                    ingredients.extend(parse_ingredient(ingredient))
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "pending"}
+    thread = threading.Thread(target=run_scrape_job, args=(job_id, recipe_url, jobs))
+    thread.start()
 
-        response = {
-            "name": title,
-            "ingredients": ingredients,
-            "instructions": instructions,
-        }
-        logging.info(f"Cleaned response {response}")
+    return {"job_id": job_id}, 201
+
+
+@app.route("/jobs")
+def list_jobs():
+    return {
+        "jobs": [{"id": key, "status": val["status"]} for key, val in jobs.items()]
+    }, 200
+
+
+@app.route("/jobs/<job_id>", methods=["DELETE"])
+def delete_job(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        return {"error": "Invalid job ID"}, 400
+
+    return {"job_id": job_id, "message": "Successfully deleted job"}, 204
+
+
+@app.route("/jobs/<job_id>/status")
+def get_job_status(job_id: str):
+    logging.info(f"Fetching details for job: {job_id}")
+    job = jobs.get(job_id)
+    if not job:
+        return {"error": "Invalid job ID"}, 400
+    job_status = job.get("status")
+    if job_status == "pending":
+        return {"job_id": job_id, "status": job_status}, 200
+    elif job_status == "error":
+        return {
+            "job_id": job_id,
+            "status": job_status,
+            "error": job.get("message"),
+        }, 200
     else:
-        scraper = scrape_me(recipe_url)
-        logging.info(f"Extracted data: {scraper.to_json()}")
-        ingredients = []
-        for ingredient in scraper.ingredients():
-            ingredients.extend(parse_ingredient(ingredient))
-        instructions = []
-        for i, instruction in enumerate(scraper.instructions().split("\n")):
-            instructions.append({"stepNumber": i, "instruction": instruction})
-        response = {
-            "name": scraper.title(),
-            "ingredients": ingredients,
-            "instructions": instructions,
-        }
-        logging.info(f"Cleaned response {response}")
+        return {
+            "job_id": job_id,
+            "status": job_status,
+            "recipe": job.get("data"),
+        }, 200
 
-    return response, 201
+
+@app.route("/jobs/<job_id>/stream")
+def get_job_stream(job_id: str):
+    def generate():
+        job = jobs.get(job_id)
+
+        # Job not found
+        if not job:
+            yield f"data: {json.dumps({'status': 'not_found'})}"
+
+        while job["status"] == "pending":
+            job = jobs.get(job_id)
+
+            # Push current status to client
+            yield f"data: {job}\n\n"
+
+            # If job is finished, close the stream
+            if job["status"] in ["success", "error"]:
+                break
+
+            # Wait before checking again
+            time.sleep(1)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # important if using nginx
+        },
+    )

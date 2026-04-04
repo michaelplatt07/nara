@@ -5,4 +5,5 @@ export default [
   route("/recipes", "./recipes/recipes_list.tsx"),
   route("/recipes/import", "./recipes/import_recipe.tsx"),
   route("/recipes/view/:recipeId", "./recipes/single_recipe.tsx"),
+  route("/jobs", "./jobs/jobs_list.tsx"),
 ] satisfies RouteConfig;

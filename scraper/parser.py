@@ -101,7 +101,9 @@ def call_phi_model(text):
         token = chunk["choices"][0]["text"]
         print(token, end="", flush=True)  # live token output
         response += token
-        if "]" in response:
+        # Only break if we have a complete, valid JSON array
+        stripped = response.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
             break
     print("\n", end="", flush=True)
     return response
@@ -157,7 +159,7 @@ def call_mistral_model(text):
 
 def parse_ingredient(text: str) -> list:
     response = call_phi_model(text)
-    logging.info(f"Response: {response}")
+    logging.info(f"Model response: {response}")
     try:
         return json.loads(response.strip())
     except json.JSONDecodeError:
@@ -165,8 +167,16 @@ def parse_ingredient(text: str) -> list:
     matches = re.findall(r"\{.*?\}", response, re.DOTALL)
     if matches:
         try:
-            return [json.loads(match) for match in matches]
-            return response
+            logging.info(f"Matches: {matches}")
+            results = []
+            for match in matches:
+                try:
+                    results.append(json.loads(match))
+                except json.JSONDecodeError:
+                    logging.warning(f"Skipping malformed match: {match}")
+                    continue
+                if results:
+                    return results
         except:
             raise Exception("Couldn't match")
 

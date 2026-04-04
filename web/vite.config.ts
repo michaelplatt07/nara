@@ -5,4 +5,12 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
+  ssr: {
+    external: ["undici"],
+  },
+  build: {
+    rollupOptions: {
+      external: ["undici"],
+    },
+  },
 });
