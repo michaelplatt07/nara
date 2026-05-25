@@ -1,10 +1,13 @@
 import express, { Request, Response } from "express";
 import axios from "axios";
-import mongoose from "mongoose";
 import { RecipeInput } from "./src/models/recipes";
 import { RecipeQueryValidator } from "./src/validators/recipeSearch";
 import * as RecipesController from "./src/controllers/recipes";
+import * as JobsController from "./src/controllers/jobs";
+import * as PhotoController from "./src/controllers/photos";
 import { validateQuery } from "./middleware";
+import { connectDb, getBucket } from "./db";
+import multer from "multer";
 
 const app = express();
 const port = 3000;
@@ -12,20 +15,19 @@ const SCRAPER_URL = "http://scraper:5000";
 
 app.use(express.json());
 
-/*
- * List of TODO Tasks:
- * Create a routes directory and different routes to import
- * Create services directory and move writing to DB to that layer
- * Create orchestrator directory and start using that for all calls to validate data, derive fields, call save, etc.
- * Set up Enums on fields that need it so we can ensure uniformity in the data
- * Implement endpoints for searching for recipes by various means, name, tags, etc
- * Build mapper for ingredient amount full name to abbreviation, C -> Cup(s) and Cup(s) -> C
- * Think about additional models needed
- */
+// Basic multer set up that loads the file into memory. This will need to change to be better in the future to do a
+// multipart upload to not destroy memory but is fine for now
+const upload = multer(); // memory storage
 
 app.get("/recipes", async (req: Request, res: Response) => {
   const recipes = await RecipesController.getAllRecipes();
-  res.send(recipes);
+  res.send({ recipes: recipes });
+});
+
+app.get("/recipes/:recipeId/details", async (req: Request, res: Response) => {
+  const recipeId = req.params.recipeId;
+  const recipe = await RecipesController.getRecipeDetails(recipeId);
+  res.send(recipe);
 });
 
 app.get(
@@ -33,7 +35,7 @@ app.get(
   validateQuery(RecipeQueryValidator),
   async (req: Request, res: Response) => {
     const recipes = await RecipesController.searchRecipes(req.validated);
-    res.status(201).send(recipes);
+    res.status(201).send({ recipes: recipes });
   },
 );
 
@@ -63,7 +65,44 @@ app.post("/recipe/import", async (req: Request, res: Response) => {
   }
 });
 
-app.listen(port, () => {
-  mongoose.connect("mongodb://db:27017/dev");
-  console.log(`Server running at http://localhost:${port}`);
+app.post("/jobs/complete", async (req: Request, res: Response) => {
+  const body = req.body;
+  const job = await JobsController.markJobImported(body.jobId);
+  res.send({ job: job });
 });
+
+app.get("/photos/:photoId", async (req: Request, res: Response) => {
+  const photo = await PhotoController.getPhotoById(req.params.photoId);
+  if (photo != null) {
+    res.send({ photo: photo });
+  } else {
+    res.status(404).send("Couldn't find file with given ID");
+  }
+});
+
+app.post(
+  "/recipes/:recipeId/photos",
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const fileUploadRes = await PhotoController.uploadFile(req.file);
+
+      RecipesController.updateRecipe(req.params.recipeId, {
+        photoId: fileUploadRes.fileId,
+      });
+      res.send({ fileId: fileUploadRes.fileId });
+    } catch (err: any) {
+      res.status(404).send({ err: err });
+    }
+  },
+);
+
+async function start() {
+  await connectDb();
+
+  app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+  });
+}
+
+start();

@@ -7,9 +7,13 @@ RUN apt install -y build-essential
 RUN apt install -y python3
 RUN apt install -y python3-pip
 
-# Set up dependencies for scraping
-RUN pip3 install gunicorn Flask recipe-scrapers llama-cpp-python gpt4all[cpu] playwright --break-system-packages
+# Set up server deps
+RUN pip3 install gunicorn Flask pymongo --break-system-packages
+# Set up scraper and LLM to be able to parse text
+RUN pip3 install recipe-scrapers llama-cpp-python gpt4all[cpu] --break-system-packages
 
+# Set up playwright to be able to go to FB for getting data
+RUN pip3 install playwright --break-system-packages
 RUN playwright install-deps
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN playwright install chromium
@@ -26,6 +30,7 @@ RUN chmod -R 777 /home/app/models
 COPY main.py main.py
 COPY parser.py parser.py
 COPY job.py job.py
+COPY db.py db.py
 EXPOSE 5000
 
 # TODO(map) This should probably be something I can call directly like a flask server or something?

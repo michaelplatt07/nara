@@ -1,10 +1,14 @@
-from flask import Flask, request, Response, stream_with_context
 import json
-import time
-from job import run_scrape_job
-import threading
-import uuid
 import logging
+import threading
+import time
+import uuid
+from datetime import datetime
+
+from flask import Flask, Response, request, stream_with_context
+from job import run_scrape_job
+
+from db import Job, get_job, get_jobs, insert_job, unset_fields, update_job
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +36,9 @@ def scrape():
 
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "pending"}
+    insert_job(
+        Job(job_id=job_id, status="pending", created_at=datetime.now(), url=recipe_url)
+    )
     thread = threading.Thread(target=run_scrape_job, args=(job_id, recipe_url, jobs))
     thread.start()
 
@@ -41,7 +48,15 @@ def scrape():
 @app.route("/jobs")
 def list_jobs():
     return {
-        "jobs": [{"id": key, "status": val["status"]} for key, val in jobs.items()]
+        "jobs": [
+            {
+                "id": job["job_id"],
+                "status": job["status"],
+                "name": job.get("data", {}).get("name"),
+                "url": job["url"],
+            }
+            for job in get_jobs()
+        ]
     }, 200
 
 
@@ -54,26 +69,54 @@ def delete_job(job_id: str):
     return {"job_id": job_id, "message": "Successfully deleted job"}, 204
 
 
+@app.route("/jobs/<job_id>/retry")
+def retry_job(job_id: str):
+    job = get_job(Job(job_id=job_id))
+    if not job:
+        return {"error": "Invalid job ID"}, 400
+
+    update_job(Job(job_id=job_id, status="pending"))
+    unset_fields(Job(job_id=job_id, data=None, message=None))
+    thread = threading.Thread(target=run_scrape_job, args=(job_id, job["url"], jobs))
+    thread.start()
+
+    return {"job_id": job_id}, 201
+
+
 @app.route("/jobs/<job_id>/status")
 def get_job_status(job_id: str):
     logging.info(f"Fetching details for job: {job_id}")
+
+    # First check the immediate cache
     job = jobs.get(job_id)
+    logging.info(f"Job from memory: {job}")
+
+    # If not present, then check if the db has the job
+    if not job:
+        logging.info(f"No job in memory, searching DB with jobId: {job_id}")
+        job = get_job(Job(job_id=job_id))
+        logging.info(f"Job from db: {job}")
+
+    # If still not present then the job never existed
     if not job:
         return {"error": "Invalid job ID"}, 400
     job_status = job.get("status")
     if job_status == "pending":
-        return {"job_id": job_id, "status": job_status}, 200
+        return {"url": job.get("url"), "job_id": job_id, "status": job_status}, 200
     elif job_status == "error":
         return {
             "job_id": job_id,
             "status": job_status,
-            "error": job.get("message"),
+            "message": job.get("message"),
+            "url": job.get("url"),
         }, 200
     else:
         return {
             "job_id": job_id,
             "status": job_status,
             "recipe": job.get("data"),
+            "original_data": job.get("original_data"),
+            "url": job.get("url"),
         }, 200
 
 

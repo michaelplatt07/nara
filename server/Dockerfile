@@ -7,6 +7,7 @@ RUN apt update
 # Copy in the source code
 COPY server.ts server.ts
 COPY middleware.ts middleware.ts
+COPY db.ts db.ts
 COPY src/ src/
 COPY package.json package.json
 COPY package-lock.json package-lock.json

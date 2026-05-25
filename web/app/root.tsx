@@ -1,5 +1,6 @@
 import {
   isRouteErrorResponse,
+  Link,
   Links,
   Meta,
   Outlet,
@@ -41,8 +42,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SiteHeader() {
+  return (
+    <div className="flex items-center justify-center">
+      <Link to={`/recipes/create`} className="bg-sky-500 p-2">
+        Create
+      </Link>{" "}
+      |
+      <Link to={`/recipes/import`} className="bg-sky-600 p-2">
+        Import
+      </Link>{" "}
+      |
+      <Link to={`/recipes`} className="bg-sky-700 p-2">
+        Recipes
+      </Link>{" "}
+      |{" "}
+      <Link to={`/jobs`} className="bg-sky-800 p-2">
+        Jobs
+      </Link>
+    </div>
+  );
+}
+
 export default function App() {
-  return <Outlet />;
+  return (
+    <div>
+      <SiteHeader />
+      <div className="flex items-center justify-center p-3">
+        <Outlet />
+      </div>
+    </div>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

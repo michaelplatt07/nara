@@ -27,6 +27,7 @@ services:
       - "5000:5000"
     volumes:
       - ./models:/home/app/models
+    depends_on: [db]
 
   web:
     build:
