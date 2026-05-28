@@ -6,11 +6,13 @@ RUN apt install -y cmake
 RUN apt install -y build-essential
 RUN apt install -y python3
 RUN apt install -y python3-pip
+RUN apt install -y git
 
 # Set up server deps
 RUN pip3 install gunicorn Flask pymongo --break-system-packages
-# Set up scraper and LLM to be able to parse text
-RUN pip3 install recipe-scrapers llama-cpp-python gpt4all[cpu] --break-system-packages
+# Set up LLM to be able to parse text
+RUN pip3 install llama-cpp-python gpt4all[cpu] --break-system-packages
+RUN pip3 install git+https://github.com/hhursev/recipe-scrapers.git@main --break-system-packages
 
 # Set up playwright to be able to go to FB for getting data
 RUN pip3 install playwright --break-system-packages

@@ -45,6 +45,7 @@ def run_scrape_job(job_id: str, recipe_url: str, jobs: dict):
                 }
                 logging.info(f"Cleaned response {response}")
             else:
+                logging.info(f"Extracting data from {recipe_url}")
                 scraper = scrape_me(recipe_url)
                 logging.info(f"Extracted data: {scraper.to_json()}")
                 update_job(
